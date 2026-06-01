@@ -10,6 +10,7 @@ import Reporting from './agents/Reporting.jsx'
 import Operations from './agents/Operations.jsx'
 import MasterDashboard from './agents/MasterDashboard.jsx'
 import TGManager from './agents/TGManager.jsx'
+import Conciliacion from './agents/Conciliacion.jsx'
 function BackBar() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/master" element={<MasterDashboard />} />
           <Route path="/operations"  element={<Operations />} />
           <Route path="/tgmanager" element={<TGManager />} />
+          <Route path="/conciliacion" element={<Conciliacion />} />
         </Routes>
       </Wrap>
     </BrowserRouter>
