@@ -8,7 +8,7 @@ import Collections from './agents/Collections.jsx'
 import DocumentFinance from './agents/DocumentFinance.jsx'
 import Reporting from './agents/Reporting.jsx'
 import Operations from './agents/Operations.jsx'
-
+import TGManager from './agents/TGManager.jsx'
 function BackBar() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -41,6 +41,7 @@ export default function App() {
           <Route path="/finance"     element={<DocumentFinance />} />
           <Route path="/reporting"   element={<Reporting />} />
           <Route path="/operations"  element={<Operations />} />
+          <Route path="/tgmanager" element={<TGManager />} />
         </Routes>
       </Wrap>
     </BrowserRouter>
