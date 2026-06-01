@@ -1,4 +1,4 @@
-# Reset Fitness Ibiza — AI Operations Hub
+# Reset Fitness Ibiza — AI Operations Hub 
 
 Sistema operativo completo con 8 agentes de IA para Reset Fitness Ibiza.
 
