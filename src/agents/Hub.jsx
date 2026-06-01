@@ -14,6 +14,8 @@ const SECTIONS = [
       { code: 'CC',  name: 'Cruce de Cobros',       subtitle: 'TPV + Bizum vs TGManager',       icon: '🔗', color: '#a855f7', path: '/cruce',        desc: 'Cada liquidación bancaria vinculada con los socios que pagaron ese día.' },
       { code: 'TG',  name: 'TGManager',             subtitle: 'Socios y cobros reales',         icon: '💳', color: '#f97316', path: '/tgmanager',    desc: '161 socios · 181 transacciones · 11.201€ cobrados exportados de TGManager.' },
       { code: 'DF',  name: 'Document & Finance',    subtitle: 'Facturas y contabilidad',        icon: '🧾', color: '#eab308', path: '/finance',      desc: 'Facturas de proveedores, IVA desglosado y preparación para gestoría.' },
+      { code: 'CF',  name: 'Cash Flow Proyectado',  subtitle: 'Proyección Jun 26 – Mar 27',     icon: '📈', color: '#22c55e', path: '/cashflow',     desc: 'Proyección mes a mes con 3 escenarios, provisiones y alerta agosto Fit-Maker.' },
+      { code: 'GC',  name: 'Gastos Clasificados',   subtitle: 'CAPEX · OPEX · DEUDA',           icon: '🏗',  color: '#a855f7', path: '/gastos',       desc: 'Clasificación de 381.714€: CAPEX obra, maquinaria, OPEX fijo y variable.' },
     ]
   },
   {
@@ -129,10 +131,10 @@ export default function Hub() {
   useEffect(() => { const t = setInterval(() => setTicker(p => (p + 1) % 4), 3000); return () => clearInterval(t) }, [])
 
   const TICKERS = [
-    '⚡ 13 módulos activos · Sistema operativo',
+    '⚡ 15 módulos activos · Sistema operativo',
     '👥 161 socios · 168 suscripciones activas',
     '💰 11.201€ cobrados · Saldo banco: 3.515,93€',
-    '⚠️ 4 cancelaciones · revisar hoy',
+    '⚠️ Alerta agosto: Fit-Maker 4.305€/mes',
   ]
 
   const filtered = search
@@ -218,7 +220,7 @@ export default function Hub() {
                 <div>
                   <div style={{ color: '#374151', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Sistema operativo</div>
                   <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 38, fontWeight: 700, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
-                    13 Módulos.<br /><span style={{ color: BRAND }}>Un gimnasio.</span>
+                    15 Módulos.<br /><span style={{ color: BRAND }}>Un gimnasio.</span>
                   </h1>
                   <p style={{ color: '#4b5563', fontSize: 14, marginTop: 12, maxWidth: 440, lineHeight: 1.6 }}>
                     Finanzas, socios, operaciones, marketing e inteligencia. Todo conectado y accesible desde aquí.
@@ -281,6 +283,7 @@ export default function Hub() {
                     { q: 'Riesgos legales y fiscales pendientes', icon: '⚖️', label: 'Riesgos pendientes' },
                     { q: 'Genera informe ejecutivo para María Lagos', icon: '📋', label: 'Informe para María' },
                     { q: 'Análisis del cruce banco vs TGManager', icon: '🔗', label: 'Análisis conciliación' },
+                    { q: '¿Cuándo llegaremos al breakeven según la proyección?', icon: '📈', label: 'Cash flow proyectado' },
                   ].map(item => (
                     <button key={item.q} onClick={() => sendMessage(item.q)} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '14px 18px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 12, fontFamily: 'sans-serif' }}
                       onMouseEnter={e => { e.currentTarget.style.background = 'rgba(57,208,216,0.06)'; e.currentTarget.style.borderColor = 'rgba(57,208,216,0.25)' }}
