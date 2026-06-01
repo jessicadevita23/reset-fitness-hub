@@ -10,7 +10,7 @@ export async function askClaude({ system, messages, maxTokens = 1000 }) {
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
-    body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: maxTokens, system, messages }),
+    body: JSON.stringify({ model: model: 'claude-opus-4-5', max_tokens: maxTokens, system, messages }),
   })
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error?.message || `HTTP ${res.status}`) }
   const data = await res.json()
