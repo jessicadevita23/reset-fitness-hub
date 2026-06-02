@@ -13,6 +13,7 @@ import TGManager from './agents/TGManager.jsx'
 import Conciliacion from './agents/Conciliacion.jsx'
 import GastosClasificados from './agents/GastosClasificados.jsx'
 import CashFlowProyectado from './agents/CashFlowProyectado.jsx'
+import RevenueForecast from './agents/RevenueForecast.jsx'
 function BackBar() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="/conciliacion" element={<Conciliacion />} />
           <Route path="/gastos" element={<GastosClasificados />} />
           <Route path="/cashflow" element={<CashFlowProyectado />} />
+          <Route path="/revenue" element={<RevenueForecast />} />
         </Routes>
       </Wrap>
     </BrowserRouter>
