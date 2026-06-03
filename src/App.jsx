@@ -14,6 +14,7 @@ import Conciliacion from './agents/Conciliacion.jsx'
 import GastosClasificados from './agents/GastosClasificados.jsx'
 import CashFlowProyectado from './agents/CashFlowProyectado.jsx'
 import RevenueForecast from './agents/RevenueForecast.jsx'
+import Bookkeeping from './agents/Bookkeeping.jsx'
 function BackBar() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="/gastos" element={<GastosClasificados />} />
           <Route path="/cashflow" element={<CashFlowProyectado />} />
           <Route path="/revenue" element={<RevenueForecast />} />
+          <Route path="/bookkeeping" element={<Bookkeeping />} />
         </Routes>
       </Wrap>
     </BrowserRouter>
