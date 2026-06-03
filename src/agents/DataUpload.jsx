@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { askClaude } from "../api.js";
 
 const BRAND = "#39D0D8";
 
@@ -276,19 +277,10 @@ Al final, da un RESUMEN EJECUTIVO para María Lagos con:
 
 Sé específico con los números y cuentas PGC.`;
 
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-opus-4-5",
-          max_tokens: 1000,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: prompt }],
-        }),
+      const texto = await askClaude({
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: prompt }],
       });
-
-      const data = await res.json();
-      const texto = data.content?.[0]?.text || "Error procesando archivos.";
 
       clearInterval(stepInterval);
       setPaso(PASOS.length - 1);
@@ -560,6 +552,10 @@ Sé específico con los números y cuentas PGC.`;
             </div>
           )}
         </div>
+      </div>
+    </>
+  );
+}
       </div>
     </>
   );
