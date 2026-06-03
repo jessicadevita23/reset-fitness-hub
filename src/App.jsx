@@ -15,6 +15,7 @@ import GastosClasificados from './agents/GastosClasificados.jsx'
 import CashFlowProyectado from './agents/CashFlowProyectado.jsx'
 import RevenueForecast from './agents/RevenueForecast.jsx'
 import Bookkeeping from './agents/Bookkeeping.jsx'
+import DataUpload from './agents/DataUpload.jsx'
 function BackBar() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -54,6 +55,7 @@ export default function App() {
           <Route path="/cashflow" element={<CashFlowProyectado />} />
           <Route path="/revenue" element={<RevenueForecast />} />
           <Route path="/bookkeeping" element={<Bookkeeping />} />
+          <Route path="/upload" element={<DataUpload />} />
         </Routes>
       </Wrap>
     </BrowserRouter>
