@@ -16,7 +16,7 @@ const SECTIONS = [
       { code: 'DF',  name: 'Document & Finance',    subtitle: 'Facturas y contabilidad',        icon: '🧾', color: '#eab308', path: '/finance',      desc: 'Facturas de proveedores, IVA desglosado y preparación para gestoría.' },
       { code: 'CF',  name: 'Cash Flow Proyectado',  subtitle: 'Proyección Jun 26 – Mar 27',     icon: '📈', color: '#22c55e', path: '/cashflow',     desc: 'Proyección mes a mes con 3 escenarios, provisiones y alerta agosto Fit-Maker.' },
       { code: 'GC',  name: 'Gastos Clasificados',   subtitle: 'CAPEX · OPEX · DEUDA',           icon: '🏗',  color: '#a855f7', path: '/gastos',      desc: 'Clasificación de 381.714€: CAPEX obra, maquinaria, OPEX fijo y variable.' },
-      { code: 'RF', name: 'Revenue Forecast', subtitle: 'Proyección ingresos Jun 26–Mar 27',    icon: '💹', color: '#22c55e', path: '/revenue',      desc: 'Forecast MRR con nuevo pricing 75€/95€, mix de socios y 3 escenarios.' },
+      { code: 'RF', name: 'Revenue Forecast',       subtitle: 'Proyección ingresos Jun 26–Mar 27',    icon: '💹', color: '#22c55e', path: '/revenue',      desc: 'Forecast MRR con nuevo pricing 75€/95€, mix de socios y 3 escenarios.' },
     ]
   },
   {
