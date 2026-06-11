@@ -556,7 +556,3 @@ Sé específico con los números y cuentas PGC.`;
     </>
   );
 }
-      </div>
-    </>
-  );
-}
