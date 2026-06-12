@@ -251,35 +251,94 @@ export default function DataUpload() {
     }, 800);
 
     try {
-      // Build context about files
-      const fileDescriptions = archivos.map(f =>
-        `- ${f.nombre} (${f.tamaño}, tipo: ${f.tipo})`
-      ).join("\n");
+      // ── Cargar librerías para leer archivos ────────────────────────────────
+      const loadScript = (src, check) => new Promise((res, rej) => {
+        if (window[check]) return res();
+        const s = document.createElement("script");
+        s.src = src; s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js", "XLSX");
 
-      const prompt = `Analiza estos archivos subidos para Reset Fitness Ibiza y procésalos contablemente:
+      // ── Leer contenido real de cada archivo ─────────────────────────────
+      const fileContents = [];
+      for (const f of archivos) {
+        const ext = f.nombre.split(".").pop().toLowerCase();
+        let contenido = `[Archivo: ${f.nombre} (${f.tamaño})]`;
+        try {
+          if (["xlsx", "xls", "csv"].includes(ext) && f.file) {
+            const arrayBuffer = await f.file.arrayBuffer();
+            const wb = window.XLSX.read(arrayBuffer, { type: "array" });
+            const textoSheets = [];
+            wb.SheetNames.forEach(name => {
+              const ws = wb.Sheets[name];
+              const csv = window.XLSX.utils.sheet_to_csv(ws, { blankrows: false });
+              const rows = csv.split("\n").filter(r => r.trim()).slice(0, 300);
+              textoSheets.push(`[Hoja: ${name}]\n${rows.join("\n")}`);
+            });
+            contenido = `[Archivo: ${f.nombre}]\n${textoSheets.join("\n\n")}`;
+          } else if (ext === "pdf" && f.file) {
+            await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js", "pdfjs-dist/build/pdf");
+            const pdfjsLib = window["pdfjs-dist/build/pdf"];
+            pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+            const ab = await f.file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+            let texto = "";
+            for (let i = 1; i <= Math.min(pdf.numPages, 10); i++) {
+              const page = await pdf.getPage(i);
+              const tc = await page.getTextContent();
+              texto += tc.items.map(it => it.str).join(" ") + "\n";
+            }
+            contenido = texto.trim().length > 20
+              ? `[Archivo: ${f.nombre}]\n${texto.substring(0, 8000)}`
+              : `[Archivo: ${f.nombre} - PDF escaneado]`;
+          } else if (["jpg","jpeg","png"].includes(ext) && f.file) {
+            const b64 = await new Promise(res => {
+              const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.readAsDataURL(f.file);
+            });
+            fileContents.push({ nombre: f.nombre, tipo: f.tipo, isImage: true, b64, mimeType: ext === "png" ? "image/png" : "image/jpeg" });
+            continue;
+          }
+        } catch(err) {
+          contenido = `[Archivo: ${f.nombre} - Error: ${err.message}]`;
+        }
+        fileContents.push({ nombre: f.nombre, tipo: f.tipo, contenido });
+      }
 
-ARCHIVOS SUBIDOS:
-${fileDescriptions}
+      // ── Construir mensaje con contenido real ────────────────────────────
+      const messageContent = [];
+      for (const fc of fileContents) {
+        if (fc.isImage) {
+          messageContent.push({ type: "image", source: { type: "base64", media_type: fc.mimeType, data: fc.b64 } });
+          messageContent.push({ type: "text", text: `[Imagen: ${fc.nombre}]` });
+        }
+      }
+      const textosArchivos = fileContents.filter(fc => !fc.isImage).map(fc => fc.contenido).join("\n\n---\n\n");
+      messageContent.push({ type: "text", text: `Analiza estos archivos de Reset Fitness Ibiza:
+
+${textosArchivos}
 
 Para cada archivo:
-1. Identifica qué tipo de documento es
-2. Indica qué datos contables contiene (importes, fechas, proveedores/clientes)
-3. Asigna las cuentas PGC correctas (código 3-4 dígitos)
-4. Señala alertas o puntos importantes
-5. Da el impacto en el Balance y P&L
+1. Identifica exactamente qué tipo de documento es
+2. Extrae TODOS los datos numéricos: importes, fechas, conceptos, proveedores
+3. Para extractos bancarios: lista cada movimiento con fecha, concepto, importe y saldo
+4. Asigna cuentas PGC correctas (3-4 dígitos)
+5. Calcula totales: ingresos, gastos, saldo neto
+6. Señala pagos pendientes o alertas
 
-Al final, da un RESUMEN EJECUTIVO para María Lagos con:
-- Total ingresos detectados
-- Total gastos detectados  
-- Saldo neto del período
+RESUMEN EJECUTIVO para María Lagos:
+- Total ingresos del período
+- Total gastos del período
+- Saldo neto
 - 3 acciones urgentes
-- Estado de la contabilidad
+- Estado general de la contabilidad
 
-Sé específico con los números y cuentas PGC.`;
+Sé MUY específico con los números reales del documento.` });
 
       const texto = await askClaude({
         system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role: "user", content: messageContent.length === 1 ? messageContent[0].text : messageContent }],
+        maxTokens: 4000,
       });
 
       clearInterval(stepInterval);
