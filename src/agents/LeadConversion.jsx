@@ -158,19 +158,12 @@ export default function LeadConversion() {
     const apiMessages = newMessages.map(m => ({ role: m.role, content: m.content }));
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: SYSTEM_PROMPT,
-          messages: apiMessages,
-        }),
+      const reply = await askClaude({
+        system: SYSTEM_PROMPT,
+        messages: apiMessages,
+        maxTokens: 1000,
       });
-      const data = await res.json();
-      const reply = data.content?.[0]?.text || "Un momento, estoy comprobando esa información.";
-      const updated = [...newMessages, { role: "assistant", content: reply, time: now() }];
+      const updated = [...newMessages, { role: "assistant", content: reply || "Un momento, estoy comprobando esa información.", time: now() }];
       setMessages(updated);
       setLeadScore(scoreLeadFromHistory(updated));
     } catch {

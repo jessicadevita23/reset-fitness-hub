@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
+import { askClaude } from "../api.js";
 
 const BRAND = "#39D0D8";
 
@@ -124,13 +125,13 @@ export default function TGManagerDashboard() {
     const context = `\nDATOS REALES TGMANAGER:\nSOCIOS (muestra): ${JSON.stringify(SOCIOS_RAW.slice(0,20))}\nPAGOS (muestra): ${JSON.stringify(PAGOS_RAW.slice(0,30))}\nSUSCRIPCIONES (muestra): ${JSON.stringify(SUBS_RAW.slice(0,20))}`;
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1000, system:SYSTEM_PROMPT+context, messages:updated.map(m=>({role:m.role,content:m.content})) }),
+      const reply = await askClaude({
+        system: SYSTEM_PROMPT + context,
+        messages: updated.map(m=>({role:m.role,content:m.content})),
+        maxTokens: 1500,
       });
-      const data = await res.json();
-      setMessages(prev=>[...prev,{ role:"assistant", content:data.content?.[0]?.text||"Sin respuesta.", time:now() }]);
-    } catch { setMessages(prev=>[...prev,{ role:"assistant", content:"Error de conexión.", time:now() }]); }
+      setMessages(prev=>[...prev,{ role:"assistant", content:reply||"Sin respuesta.", time:now() }]);
+    } catch(e) { setMessages(prev=>[...prev,{ role:"assistant", content:`⚠️ ${e.message}`, time:now() }]); }
     setLoading(false);
   }
 

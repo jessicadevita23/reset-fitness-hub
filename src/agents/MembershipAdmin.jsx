@@ -185,6 +185,14 @@ function MemberDetail({ m, onRenew, onClose }) {
 }
 
 // ── Onboarding form ──────────────────────────────────────────────
+const inputStyle = {
+  width: "100%", background: "rgba(255,255,255,0.05)",
+  border: "1px solid rgba(255,255,255,0.09)", borderRadius: 9,
+  padding: "10px 14px", color: "#e5e7eb",
+  fontFamily: "'DM Sans', sans-serif", fontSize: 14, outline: "none",
+};
+const labelStyle = { color: "#6b7280", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 };
+
 function OnboardingForm({ onSubmit }) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", plan: "mensual" });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -200,30 +208,29 @@ function OnboardingForm({ onSubmit }) {
       plan: plan.label, status: "pendiente",
       start: today, expiry, amount: 0,
     });
+    setForm({ name: "", email: "", phone: "", plan: "mensual" });
   }
-
-  const Field = ({ label, field, placeholder, type = "text" }) => (
-    <div style={{ marginBottom: 14 }}>
-      <label style={{ color: "#6b7280", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>{label}</label>
-      <input type={type} value={form[field]} onChange={e => set(field, e.target.value)} placeholder={placeholder}
-        style={{
-          width: "100%", background: "rgba(255,255,255,0.05)",
-          border: "1px solid rgba(255,255,255,0.09)", borderRadius: 9,
-          padding: "10px 14px", color: "#e5e7eb",
-          fontFamily: "'DM Sans', sans-serif", fontSize: 14,
-          outline: "none",
-        }} />
-    </div>
-  );
 
   return (
     <div style={{ animation: "fadeUp 0.3s ease" }}>
       <h3 style={{ color: "#f1f5f9", fontFamily: "'Cormorant Garamond', serif", fontSize: 18, marginBottom: 18 }}>
         Alta de nuevo socio
       </h3>
-      <Field label="Nombre completo" field="name" placeholder="María García López" />
-      <Field label="Email" field="email" placeholder="maria@email.com" type="email" />
-      <Field label="Teléfono" field="phone" placeholder="+34 600 000 000" />
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Nombre completo</label>
+        <input type="text" value={form.name} onChange={e => set("name", e.target.value)} placeholder="María García López" style={inputStyle} />
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Email</label>
+        <input type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="maria@email.com" style={inputStyle} />
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Teléfono</label>
+        <input type="text" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+34 600 000 000" style={inputStyle} />
+      </div>
 
       <div style={{ marginBottom: 18 }}>
         <label style={{ color: "#6b7280", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 8 }}>Plan</label>
@@ -292,8 +299,19 @@ function Bubble({ msg }) {
 }
 
 // ── Main ─────────────────────────────────────────────────────────
+const STORAGE_KEY = "rf_members_v1";
+
 export default function MembershipAdmin() {
-  const [members, setMembers] = useState(INITIAL_MEMBERS);
+  const [members, setMembers] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_MEMBERS;
+  });
   const [selected, setSelected] = useState(null);
   const [activeTab, setActiveTab] = useState("members");
   const [messages, setMessages] = useState([
@@ -306,6 +324,11 @@ export default function MembershipAdmin() {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
 
+  // Persistencia en localStorage
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(members)); } catch {}
+  }, [members]);
+
   function showNotif(msg, color = "#22c55e") {
     setNotification({ msg, color });
     setTimeout(() => setNotification(null), 3500);
@@ -315,6 +338,69 @@ export default function MembershipAdmin() {
     setMembers(prev => [m, ...prev]);
     showNotif(`✓ Membresía creada para ${m.name}`);
     setActiveTab("members");
+  }
+
+  function handleDelete(m) {
+    if (!confirm(`¿Eliminar a ${m.name}?`)) return;
+    setMembers(prev => prev.filter(x => x.id !== m.id));
+    setSelected(null);
+    showNotif(`🗑 ${m.name} eliminado`, "#ef4444");
+  }
+
+  function handleClearAll() {
+    if (!confirm("¿Borrar TODOS los socios? Esta acción no se puede deshacer.")) return;
+    setMembers([]);
+    showNotif("Todos los socios eliminados", "#ef4444");
+  }
+
+  async function handleImport(files) {
+    const file = files?.[0];
+    if (!file) return;
+    showNotif("📥 Leyendo archivo...", "#39D0D8");
+    try {
+      await new Promise((res, rej) => {
+        if (window.XLSX) return res();
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+      const ab = await file.arrayBuffer();
+      const wb = window.XLSX.read(ab, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = window.XLSX.utils.sheet_to_json(ws, { defval: "" });
+      if (!rows.length) { showNotif("⚠️ Archivo vacío", "#ef4444"); return; }
+      // Detectar columnas de forma flexible
+      const pick = (row, keys) => {
+        for (const k of keys) {
+          const found = Object.keys(row).find(rk => rk.toLowerCase().trim() === k.toLowerCase());
+          if (found && row[found] !== "") return String(row[found]).trim();
+        }
+        return "";
+      };
+      const today = new Date().toISOString().split("T")[0];
+      const imported = rows.map((r, i) => {
+        const name = pick(r, ["nombre", "name", "socio", "cliente", "nombre completo"]);
+        if (!name) return null;
+        const email = pick(r, ["email", "correo", "e-mail", "mail"]);
+        const phone = pick(r, ["telefono", "teléfono", "phone", "movil", "móvil"]);
+        const plan = pick(r, ["plan", "tarifa", "membresia", "membresía"]) || "Mensual";
+        const status = (pick(r, ["estado", "status"]) || "activo").toLowerCase();
+        const start = pick(r, ["alta", "inicio", "start", "fecha alta"]) || today;
+        const expiry = pick(r, ["vencimiento", "expiry", "fin", "fecha fin"]) || addMonths(today, 1);
+        return {
+          id: "RF" + String(i + 1).padStart(3, "0"),
+          name, email, phone, plan,
+          status: status.includes("activ") ? "activo" : status.includes("venc") ? "por-vencer" : status.includes("expir") ? "expirado" : "activo",
+          start, expiry, amount: 0,
+        };
+      }).filter(Boolean);
+      if (!imported.length) { showNotif("⚠️ No se detectaron socios (revisa columnas: Nombre, Email...)", "#ef4444"); return; }
+      setMembers(imported);
+      showNotif(`✓ ${imported.length} socios importados`);
+    } catch (e) {
+      showNotif(`⚠️ Error: ${e.message}`, "#ef4444");
+    }
   }
 
   function handleRenew(m, plan) {
@@ -456,12 +542,31 @@ export default function MembershipAdmin() {
                 <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
                   <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: "#f1f5f9" }}>Socios</h2>
-                    <button onClick={() => setActiveTab("alta")} style={{
-                      background: BRAND, border: "none", borderRadius: 9,
-                      padding: "8px 16px", color: "#051015",
-                      fontWeight: 700, fontSize: 12, cursor: "pointer",
-                      fontFamily: "'DM Sans', sans-serif",
-                    }}>+ Nueva alta</button>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <label style={{
+                        background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 9,
+                        padding: "8px 14px", color: "#9ca3af",
+                        fontWeight: 600, fontSize: 12, cursor: "pointer",
+                        fontFamily: "'DM Sans', sans-serif",
+                      }}>
+                        📥 Importar XLSX
+                        <input type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} onChange={e => handleImport(e.target.files)} />
+                      </label>
+                      {members.length > 0 && (
+                        <button onClick={handleClearAll} title="Borrar todos los socios" style={{
+                          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 9,
+                          padding: "8px 12px", color: "#ef4444",
+                          fontWeight: 600, fontSize: 12, cursor: "pointer",
+                          fontFamily: "'DM Sans', sans-serif",
+                        }}>🗑</button>
+                      )}
+                      <button onClick={() => setActiveTab("alta")} style={{
+                        background: BRAND, border: "none", borderRadius: 9,
+                        padding: "8px 16px", color: "#051015",
+                        fontWeight: 700, fontSize: 12, cursor: "pointer",
+                        fontFamily: "'DM Sans', sans-serif",
+                      }}>+ Nueva alta</button>
+                    </div>
                   </div>
                   {/* Column headers */}
                   <div style={{

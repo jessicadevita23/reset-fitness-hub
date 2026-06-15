@@ -219,20 +219,14 @@ Responde siempre en español, con tono profesional, claro y directo. Cuando no t
     setLoading(true);
     setResponse("");
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: systemPrompt,
-          messages: [{ role: "user", content: query }],
-        }),
+      const reply = await askClaude({
+        system: systemPrompt,
+        messages: [{ role: "user", content: query }],
+        maxTokens: 1000,
       });
-      const data = await res.json();
-      setResponse(data.content?.[0]?.text || "Sin respuesta");
+      setResponse(reply || "Sin respuesta");
     } catch (e) {
-      setResponse("Error al conectar con el Business Brain.");
+      setResponse("Error al conectar con el Business Brain: " + e.message);
     }
     setLoading(false);
   }

@@ -172,19 +172,12 @@ export default function MemberSupport() {
     setLoading(true);
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: SYSTEM_PROMPT,
-          messages: updated.map(m => ({ role: m.role, content: m.content })),
-        }),
+      const reply = await askClaude({
+        system: SYSTEM_PROMPT,
+        messages: updated.map(m => ({ role: m.role, content: m.content })),
+        maxTokens: 1000,
       });
-      const data = await res.json();
-      const reply = data.content?.[0]?.text || "Déjame comprobar eso contigo. Llámanos al +34 661 47 12 32.";
-      setMessages(prev => [...prev, { role: "assistant", content: reply, time: now() }]);
+      setMessages(prev => [...prev, { role: "assistant", content: reply || "Déjame comprobar eso contigo. Llámanos al +34 661 47 12 32.", time: now() }]);
     } catch {
       setMessages(prev => [...prev, {
         role: "assistant",
