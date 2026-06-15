@@ -353,6 +353,17 @@ export default function MembershipAdmin() {
     showNotif("Todos los socios eliminados", "#ef4444");
   }
 
+  // Regex Day Pass (compartido entre filtro de import y limpieza posterior)
+  const DAY_PASS_REGEX = /\b(day[\s-]?pass|daypass|pase[\s-]?(d[ií]a|diario|de[\s-]?un[\s-]?d[ií]a)|drop[\s-]?in|dropin|1[\s-]?d[ií]a|un[\s-]?d[ií]a|puntual|invitad[oa]|trial|sesi[oó]n[\s-]?suelta|visita[\s-]?[uú]nica)\b/i;
+
+  function handleCleanDayPasses() {
+    const toRemove = members.filter(m => DAY_PASS_REGEX.test(m.name) || DAY_PASS_REGEX.test(m.plan || ""));
+    if (!toRemove.length) { showNotif("✓ No hay day passes en la lista", "#22c55e"); return; }
+    if (!confirm(`¿Eliminar ${toRemove.length} day pass(es) de la lista?`)) return;
+    setMembers(prev => prev.filter(m => !DAY_PASS_REGEX.test(m.name) && !DAY_PASS_REGEX.test(m.plan || "")));
+    showNotif(`🧹 ${toRemove.length} day pass(es) eliminados`);
+  }
+
   async function handleImport(files) {
     const file = files?.[0];
     if (!file) return;
@@ -371,29 +382,12 @@ export default function MembershipAdmin() {
       const rows = window.XLSX.utils.sheet_to_json(ws, { defval: "" });
       if (!rows.length) { showNotif("⚠️ Archivo vacío", "#ef4444"); return; }
 
-      // Detectar columnas de forma flexible
       const pick = (row, keys) => {
         for (const k of keys) {
           const found = Object.keys(row).find(rk => rk.toLowerCase().trim() === k.toLowerCase());
           if (found && row[found] !== "") return String(row[found]).trim();
         }
         return "";
-      };
-
-      // Detector de Day Pass: busca en plan, tipo, concepto, descripción y en cualquier valor de la fila
-      const isDayPass = (row, plan) => {
-        const dpRegex = /\b(day[\s-]?pass|daypass|pase[\s-]?(d[ií]a|diario|de[\s-]?un[\s-]?d[ií]a)|drop[\s-]?in|dropin|1[\s-]?d[ií]a|un[\s-]?d[ií]a|puntual|invitad[oa]|trial)\b/i;
-        if (dpRegex.test(plan)) return true;
-        const extra = [
-          pick(row, ["tipo", "type", "categoria", "categoría"]),
-          pick(row, ["concepto", "descripcion", "descripción", "producto"]),
-        ].join(" ");
-        if (dpRegex.test(extra)) return true;
-        // Último recurso: cualquier valor de la fila
-        for (const v of Object.values(row)) {
-          if (typeof v === "string" && dpRegex.test(v)) return true;
-        }
-        return false;
       };
 
       const today = new Date().toISOString().split("T")[0];
@@ -404,7 +398,20 @@ export default function MembershipAdmin() {
         const name = pick(r, ["nombre", "name", "socio", "cliente", "nombre completo"]);
         if (!name) { skippedNoName++; return null; }
         const plan = pick(r, ["plan", "tarifa", "membresia", "membresía"]) || "Mensual";
-        if (isDayPass(r, plan)) { dayPassCount++; return null; }
+
+        // Filtro day pass: nombre, plan, tipo, concepto, o cualquier valor de la fila
+        if (DAY_PASS_REGEX.test(name) || DAY_PASS_REGEX.test(plan)) { dayPassCount++; return null; }
+        const extra = [
+          pick(r, ["tipo", "type", "categoria", "categoría"]),
+          pick(r, ["concepto", "descripcion", "descripción", "producto"]),
+        ].join(" ");
+        if (DAY_PASS_REGEX.test(extra)) { dayPassCount++; return null; }
+        let foundDayPass = false;
+        for (const v of Object.values(r)) {
+          if (typeof v === "string" && DAY_PASS_REGEX.test(v)) { foundDayPass = true; break; }
+        }
+        if (foundDayPass) { dayPassCount++; return null; }
+
         const email = pick(r, ["email", "correo", "e-mail", "mail"]);
         const phone = pick(r, ["telefono", "teléfono", "phone", "movil", "móvil"]);
         const status = (pick(r, ["estado", "status"]) || "activo").toLowerCase();
@@ -582,12 +589,20 @@ export default function MembershipAdmin() {
                         <input type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} onChange={e => handleImport(e.target.files)} />
                       </label>
                       {members.length > 0 && (
-                        <button onClick={handleClearAll} title="Borrar todos los socios" style={{
-                          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 9,
-                          padding: "8px 12px", color: "#ef4444",
-                          fontWeight: 600, fontSize: 12, cursor: "pointer",
-                          fontFamily: "'DM Sans', sans-serif",
-                        }}>🗑</button>
+                        <>
+                          <button onClick={handleCleanDayPasses} title="Eliminar day passes de la lista" style={{
+                            background: "rgba(234,179,8,0.1)", border: "1px solid rgba(234,179,8,0.25)", borderRadius: 9,
+                            padding: "8px 12px", color: "#eab308",
+                            fontWeight: 600, fontSize: 12, cursor: "pointer",
+                            fontFamily: "'DM Sans', sans-serif",
+                          }}>🧹 Day passes</button>
+                          <button onClick={handleClearAll} title="Borrar todos los socios" style={{
+                            background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 9,
+                            padding: "8px 12px", color: "#ef4444",
+                            fontWeight: 600, fontSize: 12, cursor: "pointer",
+                            fontFamily: "'DM Sans', sans-serif",
+                          }}>🗑</button>
+                        </>
                       )}
                       <button onClick={() => setActiveTab("alta")} style={{
                         background: BRAND, border: "none", borderRadius: 9,
