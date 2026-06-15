@@ -85,8 +85,21 @@ function now() {
 
 // ── Member row ───────────────────────────────────────────────────
 function MemberRow({ m, onSelect, selected }) {
-  const st = STATUS_CONFIG[m.status];
+  const st = STATUS_CONFIG[m.status] || STATUS_CONFIG["activo"];
   const days = daysUntil(m.expiry);
+  const CAT_CONFIG = {
+    "fundador":  { color: "#eab308", label: "Fundador" },
+    "metodo":    { color: "#a855f7", label: "Método" },
+    "semanal":   { color: "#f97316", label: "Semanal" },
+    "mensual":   { color: "#39D0D8", label: "Mensual" },
+    "trimestral":{ color: "#22c55e", label: "Trim." },
+    "semestral": { color: "#10b981", label: "Sem." },
+    "anual":     { color: "#3b82f6", label: "Anual" },
+    "adicional": { color: "#c084fc", label: "Solo adic." },
+    "sin-plan":  { color: "#6b7280", label: "Sin plan" },
+    "otro":      { color: "#6b7280", label: "Otro" },
+  };
+  const cat = CAT_CONFIG[m.category] || null;
   return (
     <div onClick={() => onSelect(m)} style={{
       display: "grid",
@@ -110,13 +123,43 @@ function MemberRow({ m, onSelect, selected }) {
         <div style={{ color: "#e5e7eb", fontSize: 13, fontWeight: 600 }}>{m.name}</div>
         <div style={{ color: "#4b5563", fontSize: 11 }}>{m.email}</div>
       </div>
-      <div style={{
-        padding: "4px 10px", borderRadius: 99,
-        background: st.bg, color: st.color,
-        fontSize: 11, fontWeight: 700, textAlign: "center",
-        whiteSpace: "nowrap",
-      }}>{st.icon} {st.label}</div>
-      <div style={{ color: "#6b7280", fontSize: 12 }}>{m.plan}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "stretch" }}>
+        <div style={{
+          padding: "4px 10px", borderRadius: 99,
+          background: st.bg, color: st.color,
+          fontSize: 11, fontWeight: 700, textAlign: "center",
+          whiteSpace: "nowrap",
+        }}>{st.icon} {st.label}</div>
+        {cat && (
+          <div style={{
+            padding: "1px 6px", borderRadius: 4,
+            background: `${cat.color}18`,
+            color: cat.color,
+            border: `1px solid ${cat.color}40`,
+            fontSize: 9, fontWeight: 700, textAlign: "center",
+            letterSpacing: "0.03em",
+          }}>{cat.label}</div>
+        )}
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ color: "#6b7280", fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.plan}</div>
+        {m.addons && m.addons.length > 0 && (
+          <div style={{ display: "flex", gap: 4, marginTop: 3, flexWrap: "wrap" }}>
+            {m.addons.map(a => (
+              <span key={a} style={{
+                background: "rgba(168,85,247,0.12)",
+                border: "1px solid rgba(168,85,247,0.3)",
+                borderRadius: 5,
+                padding: "1px 6px",
+                fontSize: 9,
+                color: "#c084fc",
+                fontWeight: 700,
+                letterSpacing: "0.03em",
+              }}>+ {a}</span>
+            ))}
+          </div>
+        )}
+      </div>
       <div style={{ color: days < 10 ? "#ef4444" : days < 30 ? "#eab308" : "#4b5563", fontSize: 11 }}>
         {days > 0 ? `${days}d` : "Vencido"}
       </div>
@@ -353,8 +396,31 @@ export default function MembershipAdmin() {
     showNotif("Todos los socios eliminados", "#ef4444");
   }
 
-  // Regex Day Pass (compartido entre filtro de import y limpieza posterior)
-  const DAY_PASS_REGEX = /\b(day[\s-]?pass|daypass|clase[\s-]?d[ií]a|pase[\s-]?(d[ií]a|diario|de[\s-]?un[\s-]?d[ií]a)|drop[\s-]?in|dropin|1[\s-]?d[ií]a|un[\s-]?d[ií]a|puntual|invitad[oa]|trial|sesi[oó]n[\s-]?suelta|visita[\s-]?[uú]nica)\b/i;
+  // ── Helpers de clasificación de planes ──────────────────────────
+  // Categorías de membresía
+  const planCategory = (p) => {
+    const s = (p || "").toUpperCase().trim();
+    if (!s) return "sin-plan";
+    if (s === "SEMANA" || /^SEMANA\b/.test(s)) return "semanal";
+    if (s === "PLAN ANUAL") return "anual";
+    if (s === "PLAN 6 MESES") return "semestral";
+    if (s === "PLAN 3 MESES") return "trimestral";
+    if (s === "GIMNASIO") return "mensual";
+    if (s.startsWith("SOCIO FUNDADOR")) return "fundador";
+    if (s === "METODO RESET" || s === "MÉTODO RESET") return "metodo";
+    return "otro";
+  };
+
+  // ¿Una fila es ADICIONAL (addon) en vez de membresía principal?
+  const isAddonPlan = (p) => /^\s*ADICIONAL\b/i.test(p || "");
+
+  // Nombre legible del addon a partir del plan
+  const addonLabel = (p) => {
+    const s = (p || "").toUpperCase();
+    if (/M[EÉ]TODO[\s-]?RESET/.test(s)) return "Método Reset";
+    if (/B[OU]OTY[\s-]?FLOW/.test(s)) return "Booty Flow";
+    return (p || "").replace(/^\s*ADICIONAL\s+/i, "").trim() || "Adicional";
+  };
 
   function handleCleanDayPasses() {
     const toRemove = members.filter(m => DAY_PASS_REGEX.test(m.name) || DAY_PASS_REGEX.test(m.plan || ""));
@@ -382,14 +448,12 @@ export default function MembershipAdmin() {
       const rows = window.XLSX.utils.sheet_to_json(ws, { defval: "" });
       if (!rows.length) { showNotif("⚠️ Archivo vacío", "#ef4444"); return; }
 
-      // Formatea fechas Date a YYYY-MM-DD; valores no-fecha vuelven como string
       const fmtDate = v => {
         if (v instanceof Date && !isNaN(v)) return v.toISOString().split("T")[0];
         if (typeof v === "string" && v.trim()) return v.trim();
         return "";
       };
 
-      // pick(): primero match exacto del header; si falla, match parcial (header incluye la key)
       const pick = (row, keys, asDate = false) => {
         const headers = Object.keys(row);
         for (const k of keys) {
@@ -411,17 +475,17 @@ export default function MembershipAdmin() {
       let dayPassCount = 0;
       let skippedNoName = 0;
 
-      const imported = rows.map((r, i) => {
-        // Nombre + Apellidos (export de TGManager separa los campos)
+      // PASO 1: extraer y filtrar filas válidas
+      const extracted = rows.map((r) => {
         const first = pick(r, ["nombre", "name", "first name"]);
         const last = pick(r, ["apellidos", "apellido", "last name", "surname"]);
         const name = [first, last].filter(Boolean).join(" ").trim()
           || pick(r, ["socio", "cliente", "nombre completo"]);
         if (!name) { skippedNoName++; return null; }
 
-        const plan = pick(r, ["membresía", "membresia", "plan", "tarifa"]) || "Mensual";
+        const plan = pick(r, ["membresía", "membresia", "plan", "tarifa"]);
 
-        // Filtro day pass: nombre, plan, tipo, concepto, o cualquier valor de la fila
+        // Day pass: descartar
         if (DAY_PASS_REGEX.test(name) || DAY_PASS_REGEX.test(plan)) { dayPassCount++; return null; }
         const extra = [
           pick(r, ["tipo", "type", "categoria", "categoría"]),
@@ -441,7 +505,6 @@ export default function MembershipAdmin() {
         const start = pick(r, ["fecha inicio", "fecha de alta", "alta", "inicio", "start"], true) || today;
         const expiry = pick(r, ["fecha fin", "próximo pago", "proximo pago", "vencimiento", "expiry", "fin"], true) || addMonths(today, 1);
 
-        // Mapeo de estado
         let status = "activo";
         if (rawStatus.includes("cancel")) status = "cancelado";
         else if (rawStatus.includes("impag")) status = "expirado";
@@ -449,18 +512,77 @@ export default function MembershipAdmin() {
         else if (rawStatus.includes("venc")) status = "por-vencer";
         else if (rawStatus.includes("expir")) status = "expirado";
 
-        // Recalcular por-vencer si faltan menos de 14 días para el vencimiento
-        if (status === "activo" && expiry) {
-          const days = Math.ceil((new Date(expiry) - new Date()) / 86400000);
+        return { name, email, phone, plan, status, start, expiry, idExt, isAddon: isAddonPlan(plan) };
+      }).filter(Boolean);
+
+      // PASO 2: agrupar por nombre normalizado (sin tildes, espacios trim).
+      // No usamos email como clave porque puede tener typos (caso real: hoymail.com vs hotmail.com).
+      const norm = s => (s || "").toLowerCase().trim().replace(/\s+/g, " ").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const groups = new Map();
+      for (const e of extracted) {
+        const key = `n:${norm(e.name)}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(e);
+      }
+
+      // PASO 3: mergear cada grupo en un solo socio (membresía principal + addons)
+      let mergedDuplicates = 0;
+      const imported = [];
+      let idx = 0;
+      for (const [, entries] of groups) {
+        if (entries.length > 1) mergedDuplicates += entries.length - 1;
+
+        // Separar: principales (no addon, no vacío) y addons
+        const mainsNonEmpty = entries.filter(e => !e.isAddon && e.plan);
+        const addonEntries = entries.filter(e => e.isAddon);
+        const mainsEmpty = entries.filter(e => !e.isAddon && !e.plan);
+
+        // Plan principal: el primer mains con plan; si no hay, addon (caso "solo ADICIONAL"); si no, vacío
+        let primary = mainsNonEmpty[0] || addonEntries[0] || mainsEmpty[0];
+        if (!primary) continue;
+
+        // Si la fila primaria es addon, lo marcamos como tal pero igual lo usamos como base
+        // Recolectar addons (sin duplicados)
+        const addonLabels = new Set();
+        for (const a of addonEntries) {
+          if (a !== primary) addonLabels.add(addonLabel(a.plan));
+        }
+        // Si hay más de un plan principal distinto, los planes extra se vuelven addons
+        // (caso "GIMNASIO + METODO RESET" sin ADICIONAL explícito)
+        for (let i = 1; i < mainsNonEmpty.length; i++) {
+          const extraPlan = mainsNonEmpty[i].plan;
+          if (extraPlan && extraPlan.toUpperCase() !== primary.plan?.toUpperCase()) {
+            addonLabels.add(addonLabel("ADICIONAL " + extraPlan));
+          }
+        }
+
+        const plan = primary.plan || "Sin plan";
+        let category = planCategory(plan);
+        if (primary.isAddon && !mainsNonEmpty.length) category = "adicional";
+
+        // Recalcular por-vencer si faltan ≤14 días
+        let status = primary.status;
+        if (status === "activo" && primary.expiry) {
+          const days = Math.ceil((new Date(primary.expiry) - new Date()) / 86400000);
           if (days < 0) status = "expirado";
           else if (days <= 14) status = "por-vencer";
         }
 
-        return {
-          id: idExt ? "RF" + String(idExt).padStart(3, "0") : "RF" + String(i + 1).padStart(4, "0"),
-          name, email, phone, plan, status, start, expiry, amount: 0,
-        };
-      }).filter(Boolean);
+        idx++;
+        imported.push({
+          id: primary.idExt ? "RF" + String(primary.idExt).padStart(3, "0") : "RF" + String(idx).padStart(4, "0"),
+          name: primary.name,
+          email: primary.email,
+          phone: primary.phone,
+          plan,
+          category,
+          addons: Array.from(addonLabels),
+          status,
+          start: primary.start,
+          expiry: primary.expiry,
+          amount: 0,
+        });
+      }
 
       if (!imported.length) {
         showNotif(`⚠️ 0 socios importados${dayPassCount ? ` (${dayPassCount} day passes excluidos)` : ""}`, "#ef4444");
@@ -469,8 +591,9 @@ export default function MembershipAdmin() {
       setMembers(imported);
       const extras = [];
       if (dayPassCount) extras.push(`${dayPassCount} day passes excluidos`);
-      if (skippedNoName) extras.push(`${skippedNoName} filas sin nombre`);
-      showNotif(`✓ ${imported.length} socios importados${extras.length ? ` (${extras.join(", ")})` : ""}`);
+      if (mergedDuplicates) extras.push(`${mergedDuplicates} duplicados fusionados`);
+      if (skippedNoName) extras.push(`${skippedNoName} sin nombre`);
+      showNotif(`✓ ${imported.length} socios${extras.length ? ` (${extras.join(", ")})` : ""}`);
     } catch (e) {
       showNotif(`⚠️ Error: ${e.message}`, "#ef4444");
     }
