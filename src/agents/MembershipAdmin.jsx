@@ -354,7 +354,7 @@ export default function MembershipAdmin() {
   }
 
   // Regex Day Pass (compartido entre filtro de import y limpieza posterior)
-  const DAY_PASS_REGEX = /\b(day[\s-]?pass|daypass|pase[\s-]?(d[ií]a|diario|de[\s-]?un[\s-]?d[ií]a)|drop[\s-]?in|dropin|1[\s-]?d[ií]a|un[\s-]?d[ií]a|puntual|invitad[oa]|trial|sesi[oó]n[\s-]?suelta|visita[\s-]?[uú]nica)\b/i;
+  const DAY_PASS_REGEX = /\b(day[\s-]?pass|daypass|clase[\s-]?d[ií]a|pase[\s-]?(d[ií]a|diario|de[\s-]?un[\s-]?d[ií]a)|drop[\s-]?in|dropin|1[\s-]?d[ií]a|un[\s-]?d[ií]a|puntual|invitad[oa]|trial|sesi[oó]n[\s-]?suelta|visita[\s-]?[uú]nica)\b/i;
 
   function handleCleanDayPasses() {
     const toRemove = members.filter(m => DAY_PASS_REGEX.test(m.name) || DAY_PASS_REGEX.test(m.plan || ""));
@@ -377,15 +377,32 @@ export default function MembershipAdmin() {
         document.head.appendChild(s);
       });
       const ab = await file.arrayBuffer();
-      const wb = window.XLSX.read(ab, { type: "array" });
+      const wb = window.XLSX.read(ab, { type: "array", cellDates: true });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = window.XLSX.utils.sheet_to_json(ws, { defval: "" });
       if (!rows.length) { showNotif("⚠️ Archivo vacío", "#ef4444"); return; }
 
-      const pick = (row, keys) => {
+      // Formatea fechas Date a YYYY-MM-DD; valores no-fecha vuelven como string
+      const fmtDate = v => {
+        if (v instanceof Date && !isNaN(v)) return v.toISOString().split("T")[0];
+        if (typeof v === "string" && v.trim()) return v.trim();
+        return "";
+      };
+
+      // pick(): primero match exacto del header; si falla, match parcial (header incluye la key)
+      const pick = (row, keys, asDate = false) => {
+        const headers = Object.keys(row);
         for (const k of keys) {
-          const found = Object.keys(row).find(rk => rk.toLowerCase().trim() === k.toLowerCase());
-          if (found && row[found] !== "") return String(row[found]).trim();
+          const exact = headers.find(rk => rk.toLowerCase().trim() === k.toLowerCase());
+          if (exact && row[exact] !== "" && row[exact] != null) {
+            return asDate ? fmtDate(row[exact]) : String(row[exact]).trim();
+          }
+        }
+        for (const k of keys) {
+          const partial = headers.find(rk => rk.toLowerCase().trim().includes(k.toLowerCase()));
+          if (partial && row[partial] !== "" && row[partial] != null) {
+            return asDate ? fmtDate(row[partial]) : String(row[partial]).trim();
+          }
         }
         return "";
       };
@@ -395,9 +412,14 @@ export default function MembershipAdmin() {
       let skippedNoName = 0;
 
       const imported = rows.map((r, i) => {
-        const name = pick(r, ["nombre", "name", "socio", "cliente", "nombre completo"]);
+        // Nombre + Apellidos (export de TGManager separa los campos)
+        const first = pick(r, ["nombre", "name", "first name"]);
+        const last = pick(r, ["apellidos", "apellido", "last name", "surname"]);
+        const name = [first, last].filter(Boolean).join(" ").trim()
+          || pick(r, ["socio", "cliente", "nombre completo"]);
         if (!name) { skippedNoName++; return null; }
-        const plan = pick(r, ["plan", "tarifa", "membresia", "membresía"]) || "Mensual";
+
+        const plan = pick(r, ["membresía", "membresia", "plan", "tarifa"]) || "Mensual";
 
         // Filtro day pass: nombre, plan, tipo, concepto, o cualquier valor de la fila
         if (DAY_PASS_REGEX.test(name) || DAY_PASS_REGEX.test(plan)) { dayPassCount++; return null; }
@@ -405,23 +427,38 @@ export default function MembershipAdmin() {
           pick(r, ["tipo", "type", "categoria", "categoría"]),
           pick(r, ["concepto", "descripcion", "descripción", "producto"]),
         ].join(" ");
-        if (DAY_PASS_REGEX.test(extra)) { dayPassCount++; return null; }
-        let foundDayPass = false;
+        if (extra && DAY_PASS_REGEX.test(extra)) { dayPassCount++; return null; }
+        let foundDP = false;
         for (const v of Object.values(r)) {
-          if (typeof v === "string" && DAY_PASS_REGEX.test(v)) { foundDayPass = true; break; }
+          if (typeof v === "string" && DAY_PASS_REGEX.test(v)) { foundDP = true; break; }
         }
-        if (foundDayPass) { dayPassCount++; return null; }
+        if (foundDP) { dayPassCount++; return null; }
 
         const email = pick(r, ["email", "correo", "e-mail", "mail"]);
-        const phone = pick(r, ["telefono", "teléfono", "phone", "movil", "móvil"]);
-        const status = (pick(r, ["estado", "status"]) || "activo").toLowerCase();
-        const start = pick(r, ["alta", "inicio", "start", "fecha alta"]) || today;
-        const expiry = pick(r, ["vencimiento", "expiry", "fin", "fecha fin"]) || addMonths(today, 1);
+        const phone = pick(r, ["teléfono", "telefono", "phone", "movil", "móvil"]);
+        const idExt = pick(r, ["id. socio", "id socio", "id externo", "id"]);
+        const rawStatus = (pick(r, ["estado membresía", "estado membresia", "estado", "status"]) || "activo").toLowerCase();
+        const start = pick(r, ["fecha inicio", "fecha de alta", "alta", "inicio", "start"], true) || today;
+        const expiry = pick(r, ["fecha fin", "próximo pago", "proximo pago", "vencimiento", "expiry", "fin"], true) || addMonths(today, 1);
+
+        // Mapeo de estado
+        let status = "activo";
+        if (rawStatus.includes("cancel")) status = "cancelado";
+        else if (rawStatus.includes("impag")) status = "expirado";
+        else if (rawStatus.includes("activ")) status = "activo";
+        else if (rawStatus.includes("venc")) status = "por-vencer";
+        else if (rawStatus.includes("expir")) status = "expirado";
+
+        // Recalcular por-vencer si faltan menos de 14 días para el vencimiento
+        if (status === "activo" && expiry) {
+          const days = Math.ceil((new Date(expiry) - new Date()) / 86400000);
+          if (days < 0) status = "expirado";
+          else if (days <= 14) status = "por-vencer";
+        }
+
         return {
-          id: "RF" + String(i + 1).padStart(3, "0"),
-          name, email, phone, plan,
-          status: status.includes("activ") ? "activo" : status.includes("venc") ? "por-vencer" : status.includes("expir") ? "expirado" : "activo",
-          start, expiry, amount: 0,
+          id: idExt ? "RF" + String(idExt).padStart(3, "0") : "RF" + String(i + 1).padStart(4, "0"),
+          name, email, phone, plan, status, start, expiry, amount: 0,
         };
       }).filter(Boolean);
 
