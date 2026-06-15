@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { askClaude } from "../api.js";
 
 const BRAND = "#39D0D8";
 
@@ -108,32 +109,101 @@ export default function MasterDashboard() {
 
   function showNotif(msg,color="#22c55e"){setNotif({msg,color});setTimeout(()=>setNotif(null),4000);}
 
-  // ── Parse uploaded files ────────────────────────────────────
+  // ── Parse uploaded files (lectura real del contenido) ───────
+  // Carga de librerías vía <script> (no dynamic import, que falla en este contexto)
+  const loadScript = (src, check) => new Promise((res, rej) => {
+    if (window[check]) return res();
+    const s = document.createElement("script");
+    s.src = src; s.onload = () => res(); s.onerror = () => rej(new Error("No se pudo cargar " + src));
+    document.head.appendChild(s);
+  });
+
+  function parseSheet(arrayBuffer, label) {
+    const wb = window.XLSX.read(arrayBuffer, { type: "array" });
+    const out = [];
+    wb.SheetNames.forEach(n => {
+      const csv = window.XLSX.utils.sheet_to_csv(wb.Sheets[n], { blankrows: false });
+      const rows = csv.split("\n").filter(r => r.trim()).slice(0, 300);
+      out.push(`[Hoja: ${n}]\n${rows.join("\n")}`);
+    });
+    return `[${label}]\n${out.join("\n\n")}`;
+  }
+
   async function handleFiles(files, tipo) {
     const arr = Array.from(files);
-    for (const file of arr) {
-      const name = file.name.toLowerCase();
-      if (name.includes("member") || name.includes("socio")) {
-        showNotif(`📥 ${file.name} — socios cargados`, BRAND);
-        setLastUpdate(new Date().toLocaleString("es-ES"));
-      } else if (name.includes("hist") || name.includes("pago") || name.includes("cobro")) {
-        showNotif(`📥 ${file.name} — cobros cargados`, "#22c55e");
-        setLastUpdate(new Date().toLocaleString("es-ES"));
-      } else if (name.includes("sus") || name.includes("subscr")) {
-        showNotif(`📥 ${file.name} — suscripciones cargadas`, "#a855f7");
-        setLastUpdate(new Date().toLocaleString("es-ES"));
-      } else if (name.includes("banco") || name.includes("extracto") || name.includes("movim")) {
-        showNotif(`📥 ${file.name} — extracto bancario cargado`, "#eab308");
-        setLastUpdate(new Date().toLocaleString("es-ES"));
-      } else if (name.endsWith(".zip")) {
-        showNotif(`📥 ${file.name} — facturas procesadas`, "#f97316");
-        setLastUpdate(new Date().toLocaleString("es-ES"));
-      } else {
-        showNotif(`📥 ${file.name} cargado`, BRAND);
-        setLastUpdate(new Date().toLocaleString("es-ES"));
+    if (!arr.length) return;
+    if (tab !== "asistente") setTab("asistente");
+
+    const userMsg = { role: "user", content: `📎 Subí ${arr.length} archivo(s) [${tipo}]: ${arr.map(f => f.name).join(", ")}`, time: now() };
+    const base = [...messages, userMsg];
+    setMessages(base);
+    setLoading(true);
+    showNotif(`📥 Leyendo ${arr.length} archivo(s)...`, BRAND);
+
+    try {
+      const textos = [];
+      for (const file of arr) {
+        const ext = file.name.split(".").pop().toLowerCase();
+        try {
+          if (["xlsx", "xls", "csv"].includes(ext)) {
+            await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js", "XLSX");
+            textos.push(parseSheet(await file.arrayBuffer(), file.name));
+          } else if (ext === "pdf") {
+            await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js", "pdfjs-dist/build/pdf");
+            const pdfjsLib = window["pdfjs-dist/build/pdf"];
+            pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+            const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+            let t = "";
+            for (let i = 1; i <= Math.min(pdf.numPages, 15); i++) {
+              const tc = await (await pdf.getPage(i)).getTextContent();
+              t += tc.items.map(it => it.str).join(" ") + "\n";
+            }
+            textos.push(t.trim().length > 20
+              ? `[${file.name}]\n${t.substring(0, 8000)}`
+              : `[${file.name} - PDF escaneado, sin texto extraíble]`);
+          } else if (ext === "zip") {
+            await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js", "JSZip");
+            await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js", "XLSX");
+            const zip = await window.JSZip.loadAsync(await file.arrayBuffer());
+            const names = Object.keys(zip.files).filter(n => !zip.files[n].dir);
+            const inner = [];
+            for (const n of names.slice(0, 40)) {
+              const e = n.split(".").pop().toLowerCase();
+              if (["xlsx", "xls", "csv"].includes(e)) {
+                inner.push(parseSheet(await zip.files[n].async("arraybuffer"), n));
+              } else {
+                inner.push(`[${n}]`);
+              }
+            }
+            textos.push(`[ZIP: ${file.name} — ${names.length} archivo(s)]\n${inner.join("\n\n")}`);
+          } else {
+            textos.push(`[${file.name} - formato no soportado para extracción de texto]`);
+          }
+        } catch (err) {
+          textos.push(`[${file.name} - Error al leer: ${err.message}]`);
+        }
       }
+
+      setLastUpdate(new Date().toLocaleString("es-ES"));
+      showNotif(`✅ ${arr.length} archivo(s) leído(s)`, "#22c55e");
+
+      const prompt = `Analiza estos archivos REALES de Reset Fitness Ibiza y dame un resumen de los datos y cambios detectados:
+
+${textos.join("\n\n---\n\n")}
+
+Para cada archivo: identifica el tipo de documento, extrae los datos numéricos clave (importes, fechas, conceptos, proveedores) y, para extractos bancarios, lista los movimientos. Termina con un RESUMEN para María: total ingresos, total gastos, saldo neto y acciones urgentes. Sé específico con los números reales del documento.`;
+
+      const reply = await askClaude({
+        system: SYSTEM,
+        messages: [...messages, { role: "user", content: prompt }].map(m => ({ role: m.role, content: m.content })),
+        maxTokens: 4000,
+      });
+      setMessages(prev => [...prev, { role: "assistant", content: reply || "No pude analizar los archivos.", time: now() }]);
+    } catch (e) {
+      showNotif(`⚠️ Error: ${e.message}`, "#ef4444");
+      setMessages(prev => [...prev, { role: "assistant", content: `⚠️ Error procesando archivos: ${e.message}`, time: now() }]);
     }
-    sendMessage(`He subido ${arr.length} archivo(s): ${arr.map(f=>f.name).join(", ")}. Analiza qué contienen y dame un resumen de los cambios detectados.`);
+    setLoading(false);
   }
 
   // ── Stats ────────────────────────────────────────────────────
@@ -194,13 +264,15 @@ Responde de forma concisa y directa con datos concretos.`;
     setMessages(updated);
     setLoading(true);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:SYSTEM,messages:updated.map(m=>({role:m.role,content:m.content}))})
+      const reply = await askClaude({
+        system: SYSTEM,
+        messages: updated.map(m=>({role:m.role,content:m.content})),
+        maxTokens: 1500,
       });
-      const data = await res.json();
-      setMessages(prev=>[...prev,{role:"assistant",content:data.content?.[0]?.text||"Sin respuesta.",time:now()}]);
-    } catch { setMessages(prev=>[...prev,{role:"assistant",content:"Error de conexión.",time:now()}]); }
+      setMessages(prev=>[...prev,{role:"assistant",content:reply||"Sin respuesta.",time:now()}]);
+    } catch(e) {
+      setMessages(prev=>[...prev,{role:"assistant",content:`⚠️ Error de conexión con la IA: ${e.message}`,time:now()}]);
+    }
     setLoading(false);
   }
 
