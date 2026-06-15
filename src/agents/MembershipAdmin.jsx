@@ -370,6 +370,7 @@ export default function MembershipAdmin() {
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = window.XLSX.utils.sheet_to_json(ws, { defval: "" });
       if (!rows.length) { showNotif("⚠️ Archivo vacío", "#ef4444"); return; }
+
       // Detectar columnas de forma flexible
       const pick = (row, keys) => {
         for (const k of keys) {
@@ -378,13 +379,34 @@ export default function MembershipAdmin() {
         }
         return "";
       };
+
+      // Detector de Day Pass: busca en plan, tipo, concepto, descripción y en cualquier valor de la fila
+      const isDayPass = (row, plan) => {
+        const dpRegex = /\b(day[\s-]?pass|daypass|pase[\s-]?(d[ií]a|diario|de[\s-]?un[\s-]?d[ií]a)|drop[\s-]?in|dropin|1[\s-]?d[ií]a|un[\s-]?d[ií]a|puntual|invitad[oa]|trial)\b/i;
+        if (dpRegex.test(plan)) return true;
+        const extra = [
+          pick(row, ["tipo", "type", "categoria", "categoría"]),
+          pick(row, ["concepto", "descripcion", "descripción", "producto"]),
+        ].join(" ");
+        if (dpRegex.test(extra)) return true;
+        // Último recurso: cualquier valor de la fila
+        for (const v of Object.values(row)) {
+          if (typeof v === "string" && dpRegex.test(v)) return true;
+        }
+        return false;
+      };
+
       const today = new Date().toISOString().split("T")[0];
+      let dayPassCount = 0;
+      let skippedNoName = 0;
+
       const imported = rows.map((r, i) => {
         const name = pick(r, ["nombre", "name", "socio", "cliente", "nombre completo"]);
-        if (!name) return null;
+        if (!name) { skippedNoName++; return null; }
+        const plan = pick(r, ["plan", "tarifa", "membresia", "membresía"]) || "Mensual";
+        if (isDayPass(r, plan)) { dayPassCount++; return null; }
         const email = pick(r, ["email", "correo", "e-mail", "mail"]);
         const phone = pick(r, ["telefono", "teléfono", "phone", "movil", "móvil"]);
-        const plan = pick(r, ["plan", "tarifa", "membresia", "membresía"]) || "Mensual";
         const status = (pick(r, ["estado", "status"]) || "activo").toLowerCase();
         const start = pick(r, ["alta", "inicio", "start", "fecha alta"]) || today;
         const expiry = pick(r, ["vencimiento", "expiry", "fin", "fecha fin"]) || addMonths(today, 1);
@@ -395,9 +417,16 @@ export default function MembershipAdmin() {
           start, expiry, amount: 0,
         };
       }).filter(Boolean);
-      if (!imported.length) { showNotif("⚠️ No se detectaron socios (revisa columnas: Nombre, Email...)", "#ef4444"); return; }
+
+      if (!imported.length) {
+        showNotif(`⚠️ 0 socios importados${dayPassCount ? ` (${dayPassCount} day passes excluidos)` : ""}`, "#ef4444");
+        return;
+      }
       setMembers(imported);
-      showNotif(`✓ ${imported.length} socios importados`);
+      const extras = [];
+      if (dayPassCount) extras.push(`${dayPassCount} day passes excluidos`);
+      if (skippedNoName) extras.push(`${skippedNoName} filas sin nombre`);
+      showNotif(`✓ ${imported.length} socios importados${extras.length ? ` (${extras.join(", ")})` : ""}`);
     } catch (e) {
       showNotif(`⚠️ Error: ${e.message}`, "#ef4444");
     }
