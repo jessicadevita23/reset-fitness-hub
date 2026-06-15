@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { askClaude } from "../api.js";
+import { askClaude, getMemberStats } from "../api.js";
 
 const BRAND = "#39D0D8";
 
@@ -201,11 +201,17 @@ export default function DataUpload() {
   const [resultados, setResultados] = useState([]);
   const [resumenFinal, setResumenFinal] = useState(null);
   const [tab, setTab] = useState("upload");
-  const [historial, setHistorial] = useState([
-    { fecha: "01/06/2026", tipo: "TGManager", archivos: 3, estado: "procesado", resumen: "161 socios · 11.201€ cobrados · 1 impagado" },
-    { fecha: "01/06/2026", tipo: "Banco Santander", archivos: 1, estado: "procesado", resumen: "217 movimientos · Saldo 3.515,93€ ✓" },
-    { fecha: "01/06/2026", tipo: "Facturas ZIP", archivos: 59, estado: "procesado", resumen: "59 facturas Ene-May · CAPEX 291k€ clasificado" },
-  ]);
+  const [historial, setHistorial] = useState(() => {
+    const s = getMemberStats();
+    const resumenSocios = s
+      ? `${s.total} socios · ${s.activos} activos · ${s.porVencer} por vencer`
+      : `161 socios · 11.201€ cobrados · 1 impagado`;
+    return [
+      { fecha: "01/06/2026", tipo: "TGManager", archivos: 3, estado: "procesado", resumen: resumenSocios },
+      { fecha: "01/06/2026", tipo: "Banco Santander", archivos: 1, estado: "procesado", resumen: "217 movimientos · Saldo 3.515,93€ ✓" },
+      { fecha: "01/06/2026", tipo: "Facturas ZIP", archivos: 59, estado: "procesado", resumen: "59 facturas Ene-May · CAPEX 291k€ clasificado" },
+    ];
+  });
 
   const PASOS = [
     "Leyendo archivos subidos...",

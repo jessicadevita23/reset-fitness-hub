@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { getMemberStats } from "../api.js";
 
 const BRAND = "#39D0D8";
 
@@ -357,33 +358,49 @@ export default function GastosClasificados(){
                   </div>
                   <div>
                     <div style={{color:"#9ca3af",fontSize:11,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:12}}>Ingresos necesarios para cubrir costes</div>
-                    {[
-                      ["Precio medio socio","~65€/mes"],
-                      ["Para cubrir 10.072€","155 socios"],
-                      ["Socios actuales","161 ✓"],
-                      ["Margen con 161 socios","~+378€/mes"],
-                      ["Con OPEX variable (-2k€)","~-1.622€/mes"],
-                    ].map(([l,v],i)=>(
-                      <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,0.05)",fontSize:12}}>
-                        <span style={{color:i===4?"#f1f5f9":"#9ca3af",fontWeight:i===4?700:400}}>{l}</span>
-                        <span style={{color:i===2?"#22c55e":i===3?"#22c55e":i===4?"#f97316":"#f1f5f9",fontWeight:i>=2?700:400}}>{v}</span>
-                      </div>
-                    ))}
+                    {(() => {
+                      const _live = getMemberStats();
+                      const sociosActuales = _live ? _live.total : 161;
+                      const ingresoBruto = sociosActuales * 65;
+                      const margen = ingresoBruto - 10072;
+                      const rows = [
+                        ["Precio medio socio","~65€/mes"],
+                        ["Para cubrir 10.072€","155 socios"],
+                        ["Socios actuales", `${sociosActuales} ${sociosActuales >= 155 ? '✓' : '✗'}`],
+                        [`Margen con ${sociosActuales} socios`, (margen >= 0 ? `~+${Math.round(margen)}€/mes` : `~${Math.round(margen)}€/mes`)],
+                        ["Con OPEX variable (-2k€)", `~${Math.round(margen - 2000)}€/mes`],
+                      ];
+                      return rows.map(([l,v],i)=>(
+                        <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,0.05)",fontSize:12}}>
+                          <span style={{color:i===4?"#f1f5f9":"#9ca3af",fontWeight:i===4?700:400}}>{l}</span>
+                          <span style={{color:i===2 || i===3 ? "#22c55e" : i===4 ? (margen-2000>=0?"#22c55e":"#f97316") : "#f1f5f9",fontWeight:i>=2?700:400}}>{v}</span>
+                        </div>
+                      ));
+                    })()}
                   </div>
                 </div>
               </div>
 
-              <div style={{background:"rgba(34,197,94,0.05)",border:"1px solid rgba(34,197,94,0.2)",borderRadius:12,padding:"16px 20px",marginBottom:12}}>
-                <div style={{color:"#22c55e",fontWeight:700,fontSize:13,marginBottom:10}}>✓ Conclusión — estás en el umbral</div>
-                <div style={{color:"#9ca3af",fontSize:12,lineHeight:1.7}}>
-                  Con <strong style={{color:"#f1f5f9"}}>161 socios a 65€ = 10.465€/mes</strong> de ingresos brutos, cubres los costes fijos de <strong style={{color:"#f1f5f9"}}>~10.072€</strong>.
-                  El margen es ajustado porque el OPEX variable (Amazon, materiales, catering) añade ~2.000€ más.
-                  <br/><br/>
-                  <strong style={{color:"#22c55e"}}>Para tener caja positiva necesitas:</strong>
-                  <br/>• +30 socios más (191 socios) → ~2.000€/mes de margen limpio, o
-                  <br/>• Reducir OPEX variable (Amazon, catering, alquiler coche) en ~1.500€/mes
-                </div>
-              </div>
+              {(() => {
+                const _live = getMemberStats();
+                const sociosActuales = _live ? _live.total : 161;
+                const ingresoBruto = sociosActuales * 65;
+                const margen = ingresoBruto - 10072;
+                const cajaPositiva = margen - 2000 >= 0;
+                return (
+                  <div style={{background:cajaPositiva?"rgba(34,197,94,0.05)":"rgba(234,179,8,0.05)",border:`1px solid ${cajaPositiva?"rgba(34,197,94,0.2)":"rgba(234,179,8,0.2)"}`,borderRadius:12,padding:"16px 20px",marginBottom:12}}>
+                    <div style={{color:cajaPositiva?"#22c55e":"#eab308",fontWeight:700,fontSize:13,marginBottom:10}}>
+                      {cajaPositiva ? "✓ Caja positiva con margen sano" : "⚠ Estás en el umbral"}
+                    </div>
+                    <div style={{color:"#9ca3af",fontSize:12,lineHeight:1.7}}>
+                      Con <strong style={{color:"#f1f5f9"}}>{sociosActuales} socios a 65€ = {ingresoBruto.toLocaleString('es-ES')}€/mes</strong> de ingresos brutos, frente a costes fijos de <strong style={{color:"#f1f5f9"}}>~10.072€</strong>.
+                      {cajaPositiva
+                        ? <> Margen limpio estimado <strong style={{color:"#22c55e"}}>~{(margen-2000).toLocaleString('es-ES')}€/mes</strong> tras OPEX variable (~2.000€ Amazon/materiales/catering).</>
+                        : <> El margen es ajustado porque el OPEX variable (Amazon, materiales, catering) añade ~2.000€ más.<br/><br/><strong style={{color:"#22c55e"}}>Para tener caja positiva necesitas:</strong><br/>• +30 socios más (191 socios) → ~2.000€/mes de margen limpio, o<br/>• Reducir OPEX variable (Amazon, catering, alquiler coche) en ~1.500€/mes</>}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div style={{background:"rgba(234,179,8,0.05)",border:"1px solid rgba(234,179,8,0.2)",borderRadius:12,padding:"16px 20px"}}>
                 <div style={{color:"#eab308",fontWeight:700,fontSize:13,marginBottom:10}}>⚠️ Alerta agosto 2026</div>

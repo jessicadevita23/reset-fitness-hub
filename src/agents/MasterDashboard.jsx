@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { askClaude } from "../api.js";
+import { askClaude, getMemberStats, statsSummary } from "../api.js";
 
 const BRAND = "#39D0D8";
 
@@ -98,9 +98,13 @@ export default function MasterDashboard() {
   const [tab, setTab] = useState("dashboard");
   const [notif, setNotif] = useState(null);
   const [lastUpdate, setLastUpdate] = useState("01/06/2026 12:44");
-  const [messages, setMessages] = useState([
-    {role:"assistant",content:"Hola 👋 Dashboard maestro de Reset Fitness cargado.\n\n📊 Datos actuales (01/06/2026):\n• 161 socios · 168 suscripciones activas\n• 11.201€ cobrados · 1 impagado\n• 4 cancelaciones solicitadas\n• Gastos registrados: 16.591€\n\nSube tus archivos (TGManager, banco, facturas) para actualizar.",time:now()}
-  ]);
+  const [messages, setMessages] = useState(() => {
+    const s = getMemberStats();
+    const linea = s
+      ? `• ${s.total} socios · ${s.activos} activos${s.porVencer ? ` · ${s.porVencer} por vencer` : ''}${s.expirados ? ` · ${s.expirados} expirados/cancelados` : ''}`
+      : `• 161 socios · 168 suscripciones activas`;
+    return [{ role: "assistant", content: `Hola 👋 Dashboard maestro de Reset Fitness cargado.\n\n📊 Datos actuales:\n${linea}\n• 11.201€ cobrados · 1 impagado\n• Gastos registrados: 16.591€\n\nSube tus archivos (TGManager, banco, facturas) para actualizar.`, time: now() }];
+  });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
@@ -244,9 +248,13 @@ Para cada archivo: identifica el tipo de documento, extrae los datos numéricos 
   ).map(([name,value])=>({name,value,color:CAT_COLOR[name]||"#6b7280"})).sort((a,b)=>b.value-a.value);
 
   // ── AI ───────────────────────────────────────────────────────
+  const _stats = getMemberStats();
+  const _sociosLine = _stats
+    ? `${_stats.total} socios · ${_stats.activos} activos · ${_stats.porVencer} por vencer · ${_stats.expirados} expirados/cancelados`
+    : `161 socios · 168 suscripciones activas`;
   const SYSTEM = `Eres el asistente financiero de Reset Fitness Ibiza (RESET FITNESS S.L., NIF B26660720).
 DATOS ACTUALES:
-- 161 socios · 168 suscripciones activas · 4 cancelaciones solicitadas
+- ${_sociosLine}
 - Cobrado: ${fmt(totalCobrado)}€ (TPV: ${fmt(pagos.filter(p=>p.metodo==="TPV").reduce((s,p)=>s+p.total,0))}€ | Cash: ${fmt(pagos.filter(p=>p.metodo==="Cash").reduce((s,p)=>s+p.total,0))}€)
 - Impagados: ${fmt(totalImpagado)}€ (${pagos.filter(p=>p.estado==="Impagado").length} pago)
 - Gastos registrados: ${fmt(totalGastos)}€ | IVA soportado: ${fmt(ivaTotal)}€

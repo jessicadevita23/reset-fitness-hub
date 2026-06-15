@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
-import { askClaude } from "../api.js";
+import { askClaude, getMemberStats } from "../api.js";
 
 const BRAND = "#39D0D8";
 
@@ -38,17 +38,21 @@ function CT({ active, payload, label }) {
   );
 }
 
-const SYSTEM_PROMPT = `Eres el asistente contable de Reset Fitness Ibiza. Tienes acceso a los datos reales exportados de TGManager.
+const buildSystemPrompt = (s) => {
+  const sociosLine = s
+    ? `- ${s.total} socios registrados (${s.activos} activos · ${s.porVencer} por vencer · ${s.expirados} expirados/cancelados)`
+    : `- 161 socios registrados\n- 168 suscripciones activas, 4 cancelaciones solicitadas`;
+  return `Eres el asistente contable de Reset Fitness Ibiza. Tienes acceso a los datos reales exportados de TGManager.
 
 RESUMEN:
-- 161 socios registrados
-- 168 suscripciones activas, 4 cancelaciones solicitadas
+${sociosLine}
 - 181 transacciones: 180 exitosas, 1 impagada
 - Total cobrado: 11.201€
 - Métodos: TPV 10.160€ | Cash 1.136€
 - Planes: FUNDADOR 60€ (75 socios), FUNDADOR 65€ (57), FUNDADOR 70€ (18), CON MÉTODO 60€ (21)
 
 Responde con datos concretos. Si preguntan por un socio, búscalo por nombre. Si preguntan por impagados, hay exactamente 1.`;
+};
 
 // ── Bubble ────────────────────────────────────────────────────────
 function Bubble({ msg }) {
@@ -70,9 +74,13 @@ export default function TGManagerDashboard() {
   const [filtroSocios, setFiltroSocios] = useState("todos");
   const [filtroPagos, setFiltroPagos] = useState("todos");
   const [busqueda, setBusqueda] = useState("");
-  const [messages, setMessages] = useState([
-    { role:"assistant", content:"Hola 👋 Datos de TGManager cargados.\n\n161 socios · 168 suscripciones activas · 11.201€ cobrados · 1 impagado\n\nPlanes activos:\n• FUNDADOR 60€ — 75 socios\n• FUNDADOR 65€ — 57 socios\n• CON MÉTODO 60€ — 21 socios\n• FUNDADOR 70€ — 18 socios\n\n¿Qué quieres consultar?", time:now() }
-  ]);
+  const [messages, setMessages] = useState(() => {
+    const s = getMemberStats();
+    const head = s
+      ? `${s.total} socios · ${s.activos} activos${s.porVencer ? ` · ${s.porVencer} por vencer` : ''} · 11.201€ cobrados · 1 impagado`
+      : `161 socios · 168 suscripciones activas · 11.201€ cobrados · 1 impagado`;
+    return [{ role:"assistant", content:`Hola 👋 Datos de TGManager cargados.\n\n${head}\n\nPlanes activos:\n• FUNDADOR 60€ — 75 socios\n• FUNDADOR 65€ — 57 socios\n• CON MÉTODO 60€ — 21 socios\n• FUNDADOR 70€ — 18 socios\n\n¿Qué quieres consultar?`, time:now() }];
+  });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
@@ -126,7 +134,7 @@ export default function TGManagerDashboard() {
 
     try {
       const reply = await askClaude({
-        system: SYSTEM_PROMPT + context,
+        system: buildSystemPrompt(getMemberStats()) + context,
         messages: updated.map(m=>({role:m.role,content:m.content})),
         maxTokens: 1500,
       });
@@ -179,17 +187,22 @@ export default function TGManagerDashboard() {
         <div style={{ padding:tab==="asistente"?0:24, height:"calc(100vh - 58px)", overflow:tab==="asistente"?"hidden":"auto", display:tab==="asistente"?"flex":"block", flexDirection:"column" }}>
 
           {/* ══ DASHBOARD ══ */}
-          {tab==="dashboard" && (
+          {tab==="dashboard" && (() => {
+            const _live = getMemberStats();
+            const sociosVal = _live ? String(_live.total) : "161";
+            const sociosSub = _live ? `${_live.activos} activos · ${_live.porVencer} por vencer` : "en TGManager";
+            const subt = _live ? `Datos vivos · ${_live.total} socios · 181 transacciones` : `Exportación del 01/06/2026 · 161 socios · 181 transacciones`;
+            return (
             <div style={{ animation:"fadeUp 0.3s ease" }}>
               <div style={{ marginBottom:20 }}>
                 <h2 style={{ fontFamily:"'Fraunces', serif", fontSize:20, color:"#f1f5f9", marginBottom:3 }}>Dashboard — Datos reales TGManager</h2>
-                <p style={{ color:"#4b5563", fontSize:12 }}>Exportación del 01/06/2026 · 161 socios · 181 transacciones</p>
+                <p style={{ color:"#4b5563", fontSize:12 }}>{subt}</p>
               </div>
 
               {/* KPIs */}
               <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:18 }}>
                 {[
-                  { label:"Socios registrados", val:"161",              color:BRAND,     sub:"en TGManager" },
+                  { label:"Socios registrados", val:sociosVal,           color:BRAND,     sub:sociosSub },
                   { label:"Suscripciones activas", val:`${subsActivas}`, color:"#22c55e", sub:`${subsCanceladas} cancelaciones` },
                   { label:"Total cobrado",       val:`${fmt(totalCobrado)}€`, color:"#22c55e", sub:"180 pagos exitosos" },
                   { label:"Impagados",           val:`${fmt(totalImpagado)}€`, color:"#ef4444", sub:"1 pago fallido" },
@@ -261,7 +274,8 @@ export default function TGManagerDashboard() {
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {/* ══ SOCIOS ══ */}
           {tab==="socios" && (

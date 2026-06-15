@@ -123,9 +123,19 @@ export default function Hub() {
   const navigate = useNavigate()
   const [view, setView] = useState('hub')
   const [search, setSearch] = useState('')
-  const [messages, setMessages] = useState([
-    { role: 'assistant', content: 'Buenos días 👋 Sistema Reset Fitness AI operativo.\n\n13 módulos activos · 161 socios · Saldo banco: 3.515,93€ ✓\n\n⚠️ Alertas: 4 cancelaciones · 1 impagado · Fit-Maker 4.305€ en agosto\n\n¿Qué quieres gestionar?', time: now() }
-  ])
+  const [messages, setMessages] = useState(() => {
+    const s = (() => {
+      try {
+        const saved = localStorage.getItem('rf_members_v1')
+        if (saved) {
+          const list = JSON.parse(saved)
+          if (Array.isArray(list) && list.length) return list.length
+        }
+      } catch {}
+      return 161
+    })()
+    return [{ role: 'assistant', content: `Buenos días 👋 Sistema Reset Fitness AI operativo.\n\n15 módulos activos · ${s} socios · Saldo banco: 3.515,93€ ✓\n\n⚠️ Alertas: 4 cancelaciones · 1 impagado · Fit-Maker 4.305€ en agosto\n\n¿Qué quieres gestionar?`, time: now() }]
+  })
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [ticker, setTicker] = useState(0)
