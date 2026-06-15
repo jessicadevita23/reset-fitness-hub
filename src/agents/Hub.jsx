@@ -50,10 +50,11 @@ const SECTIONS = [
 
 const ALL_AGENTS = SECTIONS.flatMap(s => s.agents)
 
-const SYSTEM_PROMPT = `Eres el COO virtual de Reset Fitness Ibiza. Tienes acceso completo a todos los sistemas.
-DATOS: 161 socios · 168 suscripciones activas · 11.201€ cobrados · Saldo banco: 3.515,93€
+const buildSystemPrompt = (stats) => `Eres el COO virtual de Reset Fitness Ibiza. Tienes acceso completo a todos los sistemas.
+DATOS ACTUALES: ${stats.total || 161} socios totales · ${stats.activos || 168} activos · ${stats.porVencer || 0} por vencer · ${stats.expirados || 0} expirados/cancelados
+11.201€ cobrados · Saldo banco: 3.515,93€
 Préstamo principal: 350.000€ · Cuota Fit-Maker desde agosto: 4.305€/mes
-4 cancelaciones solicitadas · 1 impagado · 59 facturas procesadas
+59 facturas procesadas
 Responde como COO: directo, ejecutivo, accionable.`
 
 function now() { return new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) }
@@ -133,9 +134,32 @@ export default function Hub() {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
   useEffect(() => { const t = setInterval(() => setTicker(p => (p + 1) % 4), 3000); return () => clearInterval(t) }, [])
 
+  // Leer socios reales desde localStorage (los que la usuaria importó en /members)
+  const [memberStats, setMemberStats] = useState({ total: 0, activos: 0, porVencer: 0, expirados: 0 })
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('rf_members_v1')
+      if (saved) {
+        const list = JSON.parse(saved)
+        if (Array.isArray(list)) {
+          setMemberStats({
+            total: list.length,
+            activos: list.filter(m => m.status === 'activo').length,
+            porVencer: list.filter(m => m.status === 'por-vencer').length,
+            expirados: list.filter(m => m.status === 'expirado' || m.status === 'cancelado').length,
+          })
+        }
+      }
+    } catch {}
+  }, [])
+
+  // Conteos a mostrar: si hay datos importados úsalos, sino los hardcoded de referencia
+  const socios = memberStats.total || 161
+  const activos = memberStats.activos || 168
+
   const TICKERS = [
     '⚡ 15 módulos activos · Sistema operativo',
-    '👥 161 socios · 168 suscripciones activas',
+    `👥 ${socios} socios · ${activos} activos${memberStats.porVencer ? ` · ${memberStats.porVencer} por vencer` : ''}`,
     '💰 11.201€ cobrados · Saldo banco: 3.515,93€',
     '⚠️ Alerta agosto: Fit-Maker 4.305€/mes',
   ]
@@ -158,7 +182,7 @@ export default function Hub() {
     setMessages(updated)
     setLoading(true)
     try {
-      const reply = await askClaude({ system: SYSTEM_PROMPT, messages: updated.map(m => ({ role: m.role, content: m.content })) })
+      const reply = await askClaude({ system: buildSystemPrompt(memberStats), messages: updated.map(m => ({ role: m.role, content: m.content })) })
       setMessages(prev => [...prev, { role: 'assistant', content: reply, time: now() }])
     } catch (e) {
       setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${e.message}`, time: now() }])
