@@ -56,6 +56,7 @@ function Bubble({msg}){
 export default function ConciliacionDashboard(){
   const [tab,setTab]=useState("dashboard");
   const [filtroBanco,setFiltroBanco]=useState("todos");
+  const [filtroMes,setFiltroMes]=useState("todos");
   const [busqueda,setBusqueda]=useState("");
   const [messages,setMessages]=useState(() => {
     const s = getMemberStats();
@@ -91,9 +92,15 @@ export default function ConciliacionDashboard(){
   // Filter bank movements
   const movFiltrados=BANCO_DATA.filter(m=>{
     const matchTipo=filtroBanco==="todos"||(filtroBanco==="ingresos"&&m.importe>0)||(filtroBanco==="gastos"&&m.importe<0)||(filtroBanco===m.categoria);
+    const matchMes=filtroMes==="todos"||m.mes===filtroMes;
     const matchBusc=!busqueda||m.concepto.toLowerCase().includes(busqueda.toLowerCase());
-    return matchTipo&&matchBusc;
+    return matchTipo&&matchMes&&matchBusc;
   });
+
+  // Conteo por mes (para mostrar en botones)
+  const conteoPorMes=BANCO_DATA.reduce((acc,m)=>{acc[m.mes]=(acc[m.mes]||0)+1;return acc;},{});
+  const mesesDisponibles=Object.keys(conteoPorMes).sort().reverse();
+  const MES_LABEL={"2026-06":"Jun","2026-05":"May","2026-04":"Abr","2026-03":"Mar","2026-02":"Feb","2026-01":"Ene"};
 
   const SYSTEM=`Eres el asistente de conciliación bancaria de Reset Fitness Ibiza.
 EXTRACTO SANTANDER (05/01-01/06/2026):
@@ -243,14 +250,21 @@ Responde con datos concretos del extracto real.`;
           {/* ══ BANCO ══ */}
           {tab==="banco"&&(
             <div style={{animation:"fadeUp 0.3s ease"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
                 <h2 style={{fontFamily:"'Fraunces',serif",fontSize:20,color:"#f1f5f9"}}>Movimientos Santander ({BANCO_DATA.length})</h2>
-                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
                   <input value={busqueda} onChange={e=>setBusqueda(e.target.value)} placeholder="Buscar concepto..." style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.09)",borderRadius:8,padding:"6px 12px",color:"#e5e7eb",fontFamily:"sans-serif",fontSize:11,width:200}}/>
                   {["todos","ingresos","gastos"].map(f=>(
                     <button key={f} onClick={()=>setFiltroBanco(f)} style={{padding:"5px 12px",borderRadius:99,background:filtroBanco===f?"rgba(57,208,216,0.12)":"rgba(255,255,255,0.04)",border:`1px solid ${filtroBanco===f?"rgba(57,208,216,0.35)":"rgba(255,255,255,0.07)"}`,color:filtroBanco===f?BRAND:"#6b7280",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif",textTransform:"capitalize"}}>{f}</button>
                   ))}
                 </div>
+              </div>
+              {/* Filtros de mes */}
+              <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
+                <button onClick={()=>setFiltroMes("todos")} style={{padding:"4px 10px",borderRadius:99,background:filtroMes==="todos"?"rgba(57,208,216,0.15)":"rgba(255,255,255,0.04)",border:`1px solid ${filtroMes==="todos"?"rgba(57,208,216,0.35)":"rgba(255,255,255,0.07)"}`,color:filtroMes==="todos"?BRAND:"#6b7280",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif"}}>Todos ({BANCO_DATA.length})</button>
+                {mesesDisponibles.map(mes=>(
+                  <button key={mes} onClick={()=>setFiltroMes(mes)} style={{padding:"4px 10px",borderRadius:99,background:filtroMes===mes?"rgba(57,208,216,0.15)":"rgba(255,255,255,0.04)",border:`1px solid ${filtroMes===mes?"rgba(57,208,216,0.35)":"rgba(255,255,255,0.07)"}`,color:filtroMes===mes?BRAND:"#6b7280",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif"}}>{MES_LABEL[mes]||mes} ({conteoPorMes[mes]})</button>
+                ))}
               </div>
               <div style={{color:"#4b5563",fontSize:11,marginBottom:10}}>
                 Mostrando {movFiltrados.length} movimientos · Total: {fmt(movFiltrados.reduce((s,m)=>s+m.importe,0))}€
@@ -259,7 +273,7 @@ Responde con datos concretos del extracto real.`;
                 <table>
                   <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Importe</th><th>Saldo</th></tr></thead>
                   <tbody>
-                    {movFiltrados.slice(0,150).map((m,i)=>(
+                    {movFiltrados.slice(0,300).map((m,i)=>(
                       <tr key={i}>
                         <td style={{color:"#6b7280",whiteSpace:"nowrap"}}>{m.fecha}</td>
                         <td style={{color:"#d1d5db",maxWidth:320,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.concepto}</td>
@@ -270,7 +284,7 @@ Responde con datos concretos del extracto real.`;
                     ))}
                   </tbody>
                 </table>
-                {movFiltrados.length>150&&<div style={{padding:"10px 14px",color:"#4b5563",fontSize:11,borderTop:"1px solid rgba(255,255,255,0.05)"}}>Mostrando 150 de {movFiltrados.length}. Usa la búsqueda para filtrar.</div>}
+                {movFiltrados.length>300&&<div style={{padding:"10px 14px",color:"#4b5563",fontSize:11,borderTop:"1px solid rgba(255,255,255,0.05)"}}>Mostrando 300 de {movFiltrados.length}. Usa filtros para acotar.</div>}
               </div>
             </div>
           )}
