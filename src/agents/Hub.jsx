@@ -4,6 +4,17 @@ import { askClaude } from '../api.js'
 
 const BRAND = '#39D0D8'
 
+const _liveSocios = (() => {
+  try {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('rf_members_v1') : null
+    if (saved) {
+      const list = JSON.parse(saved)
+      if (Array.isArray(list) && list.length) return list.length
+    }
+  } catch {}
+  return 161
+})()
+
 const SECTIONS = [
   {
     title: "Finanzas & Contabilidad",
@@ -12,7 +23,7 @@ const SECTIONS = [
       { code: 'MD',  name: 'Dashboard Maestro',     subtitle: 'Todo en una pantalla',           icon: '📊', color: '#22c55e', path: '/master',       desc: 'Socios, cobros, gastos y cash flow consolidados en tiempo real.' },
       { code: 'CB',  name: 'Conciliación Bancaria', subtitle: 'Banco + facturas + cuadre',      icon: '⚖️', color: BRAND,     path: '/conciliacion', desc: 'Extracto Santander cruzado con facturas de proveedores. Saldo verificado ✓' },
       { code: 'CC',  name: 'Cruce de Cobros',       subtitle: 'TPV + Bizum vs TGManager',       icon: '🔗', color: '#a855f7', path: '/cruce',        desc: 'Cada liquidación bancaria vinculada con los socios que pagaron ese día.' },
-      { code: 'TG',  name: 'TGManager',             subtitle: 'Socios y cobros reales',         icon: '💳', color: '#f97316', path: '/tgmanager',    desc: '161 socios · 181 transacciones · 11.201€ cobrados exportados de TGManager.' },
+      { code: 'TG',  name: 'TGManager',             subtitle: 'Socios y cobros reales',         icon: '💳', color: '#f97316', path: '/tgmanager',    desc: `${_liveSocios} socios · 181 transacciones · 11.201€ cobrados exportados de TGManager.` },
       { code: 'DF',  name: 'Document & Finance',    subtitle: 'Facturas y contabilidad',        icon: '🧾', color: '#eab308', path: '/finance',      desc: 'Facturas de proveedores, IVA desglosado y preparación para gestoría.' },
       { code: 'CF',  name: 'Cash Flow Proyectado',  subtitle: 'Proyección Jun 26 – Mar 27',     icon: '📈', color: '#22c55e', path: '/cashflow',     desc: 'Proyección mes a mes con 3 escenarios, provisiones y alerta agosto Fit-Maker.' },
       { code: 'GC',  name: 'Gastos Clasificados',   subtitle: 'CAPEX · OPEX · DEUDA',           icon: '🏗',  color: '#a855f7', path: '/gastos',      desc: 'Clasificación de 381.714€: CAPEX obra, maquinaria, OPEX fijo y variable.' },
